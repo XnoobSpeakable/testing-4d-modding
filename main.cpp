@@ -6,7 +6,7 @@ using namespace fdm;
 initDLL
 
 #include "4DKeyBinds.h"
-/*
+
 float deltaRatio(float ratio, double dt, double targetDelta)
 {
 	const double rDelta = dt / (1.0 / (1.0 / targetDelta));
@@ -36,18 +36,35 @@ float ilerp(float a, float b, float ratio, double dt, bool clampRatio = true)
 // variables
 bool flyEnabled = false;
 float yVel = 0.0f;
-*/
+
 $hook(void, Player, update, World* world, double dt, EntityPlayer* entityPlayer)
 {
 	// check if `self` is the local player. if not then dont do any shit
 	if (self != &fdm::StateGame::instanceObj->player) return;
-	
+	if (flyEnabled)
+	{
+		float yVelT = 0;
+		float speed = self->keys.ctrl ? 20.0f : 15.0f;
+		if (!self->touchingGround && self->keys.shift)
+			yVelT -= speed;
+		if (self->keys.space)
+			yVelT += speed;
+		yVel = ilerp(yVel, yVelT, 0.1f, dt);
+	}
 	original(self, world, dt, entityPlayer);
 }
 
 $hook(void, Player, updatePos, World* world, double dt)
 {
-	if (!(BlockInfo::TYPE)world->getBlock(Player::pos + Player::vel*dt)==BlockInfo::AIR  && ((BlockInfo::TYPE)world->getBlock(blockPosition))==BlockInfo::AIR) {
+	if (flyEnabled)
+	{
+		self->deltaVel.y = 0;
+		self->vel.y = yVel;
+	}
+	else
+		yVel = self->vel.y;
+
+	if ((BlockInfo::TYPE)world->getBlock(Player::pos + Player::vel*dt)==BlockInfo::Blocks.at(world->getBlock(blockPos)).solid && ((BlockInfo::TYPE)world->getBlock(blockPosition))==BlockInfo::AIR) {
 		self->pos.y += 1;
 
 	}
@@ -64,7 +81,9 @@ $hook(bool, Player, keyInput, GLFWwindow* window, World* world, int key, int sca
 {
 	if(!KeyBinds::isLoaded()) // if no 4DKeyBinds mod
 	{
-		// no need
+		// Switch `flyEnabled` when F press
+		if (key == GLFW_KEY_F)
+			toggleFlyCallback(window, action, mods);
 	}
 	
 	return original(self, window, world, key, scancode, action, mods);
@@ -72,5 +91,5 @@ $hook(bool, Player, keyInput, GLFWwindow* window, World* world, int key, int sca
 
 $exec
 {
-	//KeyBinds::addBind("4D-Fly", "Toggle Fly", glfw::Keys::F, KeyBindsScope::PLAYER, toggleFlyCallback);
+	KeyBinds::addBind("4D-Fly", "Toggle Fly", glfw::Keys::F, KeyBindsScope::PLAYER, toggleFlyCallback);
 }
