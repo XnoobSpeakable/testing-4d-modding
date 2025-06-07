@@ -64,7 +64,7 @@ $hook(void, Player, updatePos, World* world, double dt)
 	else
 		yVel = self->vel.y;
 
-	if ((BlockInfo::TYPE)world->getBlock(Player::pos + Player::vel*dt)==BlockInfo::Blocks.at(world->getBlock(blockPos)).solid && ((BlockInfo::TYPE)world->getBlock(blockPosition))==BlockInfo::AIR) {
+	if (!(BlockInfo::TYPE)world->getBlock(Player::pos + Player::vel*dt)==BlockInfo::AIR  && ((BlockInfo::TYPE)world->getBlock(blockPosition))==BlockInfo::AIR) {
 		self->pos.y += 1;
 
 	}
