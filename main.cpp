@@ -1,39 +1,91 @@
-//#define DEBUG_CONSOLE // Uncomment this if you want a debug console to start. You can use the Console class to print. You can use Console::inStrings to get input.
+//#define DEBUG_CONSOLE
 
 #include <4dm.h>
-
 using namespace fdm;
 
-// Initialize the DLLMain
 initDLL
 
-$hook(void, StateGame, init, StateManager& s)
-{
-	// Your code that runs at first frame here (it calls when you load into the world)
+#include "4DKeyBinds.h"
 
-	original(self, s);
+float deltaRatio(float ratio, double dt, double targetDelta)
+{
+	const double rDelta = dt / (1.0 / (1.0 / targetDelta));
+	const double s = 1.0 - ratio;
+
+	return (float)(1.0 - pow(s, rDelta));
 }
+
+float deltaRatio(float ratio, double dt)
+{
+	return deltaRatio(ratio, dt, 1.0 / 100.0);
+}
+
+float lerp(float a, float b, float ratio, bool clampRatio = true)
+{
+	if (clampRatio)
+		ratio = glm::clamp(ratio, 0.f, 1.f);
+	return a + (b - a) * ratio;
+}
+
+float ilerp(float a, float b, float ratio, double dt, bool clampRatio = true)
+{
+	return lerp(a, b, deltaRatio(ratio, dt), clampRatio);
+}
+
+
+// variables
+bool flyEnabled = false;
+float yVel = 0.0f;
 
 $hook(void, Player, update, World* world, double dt, EntityPlayer* entityPlayer)
 {
-	// Your code that runs every frame here (it only calls when you play in world, because its Player's function)
-
+	// check if `self` is the local player. if not then dont do any shit
+	if (self != &fdm::StateGame::instanceObj->player) return;
+	if (flyEnabled)
+	{
+		float yVelT = 0;
+		float speed = self->keys.ctrl ? 20.0f : 15.0f;
+		if (!self->touchingGround && self->keys.shift)
+			yVelT -= speed;
+		if (self->keys.space)
+			yVelT += speed;
+		yVel = ilerp(yVel, yVelT, 0.1f, dt);
+	}
 	original(self, world, dt, entityPlayer);
+}
+
+$hook(void, Player, updatePos, World* world, double dt)
+{
+	if (flyEnabled)
+	{
+		self->deltaVel.y = 0;
+		self->vel.y = yVel;
+	}
+	else
+		yVel = self->vel.y;
+
+	original(self, world, dt);
+}
+
+void toggleFlyCallback(GLFWwindow* window, int action, int mods)
+{
+	if(action == GLFW_PRESS)
+		flyEnabled = !flyEnabled;
 }
 
 $hook(bool, Player, keyInput, GLFWwindow* window, World* world, int key, int scancode, int action, int mods)
 {
-	// Your code that runs when Key Input happens (check GLFW Keyboard Input tutorials)|(it only calls when you play in world, because its Player's function)
-
+	if(!KeyBinds::isLoaded()) // if no 4DKeyBinds mod
+	{
+		// Switch `flyEnabled` when F press
+		if (key == GLFW_KEY_F)
+			toggleFlyCallback(window, action, mods);
+	}
+	
 	return original(self, window, world, key, scancode, action, mods);
 }
 
-$hook(void, StateIntro, init, StateManager& s)
+$exec
 {
-	original(self, s);
-
-	// initialize opengl stuff
-	glewExperimental = true;
-	glewInit();
-	glfwInit();
+	KeyBinds::addBind("4D-Fly", "Toggle Fly", glfw::Keys::F, KeyBindsScope::PLAYER, toggleFlyCallback);
 }
